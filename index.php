@@ -47,6 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['file'])) {
     <title><?= htmlspecialchars($appName, ENT_QUOTES, 'UTF-8') ?></title>
 </head>
 <body>
+
+    <h1>This text is entered around 11:16PM Nov14</h1>
     <h1><?= htmlspecialchars($appName, ENT_QUOTES, 'UTF-8') ?></h1>
 
     <?php if ($message !== ''): ?>
