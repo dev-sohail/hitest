@@ -1,12 +1,20 @@
 name: CI
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+# Cancel in-progress runs when a new commit lands on the same branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  check:
+  # ── Stage 1: static checks (fast, always runs) ──────────────────────
+  static:
+    name: Static checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,16 +23,50 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
+          coverage: none
 
-      - name: PHP syntax check
-        run: php -l index.php
-
-      - name: JS syntax check
-        run: node --check script.js
-
-      - name: Fail if .env is committed
+      - name: PHP syntax check (all .php files)
         run: |
-          if git ls-files | grep -qE '^\.env$'; then
-            echo "::error::.env must not be committed"
+          fail=0
+          while IFS= read -r -d '' f; do
+            php -l "$f" || fail=1
+          done < <(find . -name '*.php' -not -path './.git/*' -print0)
+          exit $fail
+
+      - name: JS syntax check (all .js files)
+        run: |
+          fail=0
+          while IFS= read -r -d '' f; do
+            node --check "$f" || fail=1
+          done < <(find . -name '*.js' -not -path './.git/*' -not -path './node_modules/*' -print0)
+          exit $fail
+
+      - name: Guard — .env must never be committed
+        run: |
+          if git ls-files | grep -qE '(^|/)\.env$'; then
+            echo "::error::A .env file is tracked by git. Remove it: git rm --cached .env"
             exit 1
           fi
+
+  # ── Stage 2: tests (skipped until you add a test runner) ────────────
+  # Uncomment when you add phpunit / a test script.
+  #
+  # test:
+  #   name: Tests
+  #   needs: static
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: shivammathur/setup-php@v2
+  #       with:
+  #         php-version: '8.2'
+  #     - run: composer install --no-interaction --prefer-dist
+  #     - run: vendor/bin/phpunit
+
+  # ── Stage 3: required-status gate (single check name for branch protection) ──
+  ci-passed:
+    name: CI passed
+    needs: [static]        # add `test` here when you enable it
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All CI checks passed"
